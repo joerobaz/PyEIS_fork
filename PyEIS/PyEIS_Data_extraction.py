@@ -11,9 +11,12 @@ This script contains tools for extracting impedance data from data files. Curren
 """
 #Python dependencies
 from __future__ import division
+import re
 import pandas as pd
 import numpy as np
 from scipy.constants import codata
+
+
 
 #### Extracting .mpt files with PEIS or GEIS data
 def correct_text_EIS(text_header):
@@ -30,11 +33,11 @@ def correct_text_EIS(text_header):
     
     Kristian B. Knudsen (kknu@berkeley.edu || kristianbknudsen@gmail.com)
     '''
-    if text_header == 'freq/Hz' or text_header == '  Freq(Hz)':
+    if text_header == 'freq/Hz' or text_header == '  Freq(Hz)' or text_header == 'Frequency (Hz)':
         return 'f'
-    elif text_header == 'Re(Z)/Ohm' or text_header == "Z'(a)":
+    elif text_header == 'Re(Z)/Ohm' or text_header == "Z'(a)" or text_header == "Z' (Ohm)":
         return 're'
-    elif text_header == '-Im(Z)/Ohm' or text_header == "Z''(b)":
+    elif text_header == '-Im(Z)/Ohm' or text_header == "Z''(b)" or text_header == "Z'' (Ohm)":
         return 'im'
 #    elif text_header == "Z''(b)":
 #        return 'im_neg'
@@ -87,6 +90,17 @@ def correct_text_EIS(text_header):
     else:
         return text_header
     
+
+def modulab_rename_columns(df):
+    '''renames columns exported from modulab to .z for use with PyEIS formatting'''
+    df=df.rename(columns={
+        'Frequency (Hz)':'f',
+        " Z' (Ohm)":'re',
+        " Z'' (Ohm)":'im',
+        " Time (s)":'times'})
+    return df
+
+
 def extract_mpt(path, EIS_name):
     '''
     Extracting PEIS and GEIS data files from EC-lab '.mpt' format, coloums are renames following correct_text_EIS()
@@ -122,7 +136,7 @@ def extract_dta(path, EIS_name):
     data = data.assign(cycle_number = 1.0)
     return data
 
-def extract_solar(path, EIS_name):
+def extract_solar_OLD(path, EIS_name):
     '''
     Extracting data files from Solartron's '.z' format, coloums are renames following correct_text_EIS()
     
@@ -138,6 +152,23 @@ def extract_solar(path, EIS_name):
     for j in range(len(header_names_raw.columns)):
         header_names.append(correct_text_EIS(header_names_raw.columns[j])) #reads coloumn text
     data = pd.read_csv(path+EIS_name, sep='\t', skiprows=header_loc+2, names=header_names, encoding='latin1')
+    data.update({'im': -data.im})
+    data = data.assign(cycle_number = 1.0)
+    return data
+
+def extract_solar(path, EIS_name):
+    '''
+    Extracting data files from Solartron's '.z' format, coloums are renames following correct_text_EIS()
+    
+    Kristian B. Knudsen (kknu@berkeley.edu || kristianbknudsen@gmail.com)
+    '''
+    dummy_col = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I','J','K','L','M','N','O','P']
+    init = pd.read_csv(path+EIS_name, encoding='latin1', sep=',', names=dummy_col)
+    ZC = pd.Index(init.A)
+    header_loc = ZC.get_loc('Frequency (Hz)')
+    data = pd.read_csv(path+EIS_name,sep=',',header=header_loc)
+    print(data)
+    data = modulab_rename_columns(data)
     data.update({'im': -data.im})
     data = data.assign(cycle_number = 1.0)
     return data
